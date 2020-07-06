@@ -1,0 +1,347 @@
+---
+title: "Data Analysis Skill Test - Case 1"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+
+# Instalando pacotes. Favor desmarcar hashtags dos comandos caso seja necessário instalar algum pacote.
+
+# install.packages('skimr')
+# install.packages('forecast')
+# install.packages('ggplot2')
+# install.packages('RColorBrewer')
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+
+# Importando arquivo TFP
+
+library(skimr)
+library(forecast)
+library(ggplot2)
+library(RColorBrewer)
+
+data = read.csv('TFP.csv', header = T)
+
+data$year <- as.character(data$year)
+
+```
+
+## **Análise Exploratória**
+
+---
+
+```{r echo=FALSE}
+
+skim(data)
+
+```
+
+Na variável isocode temos 186 registros, sendo 3 valores únicos - CAN, MEX e USA. Nenhum missing value.
+
+```{r echo=FALSE}
+
+summary(as.factor(data$isocode))
+
+```
+
+Gráfico de histograma e densidade para verificar a distribuição da variável rtfpna
+
+```{r echo=FALSE}
+
+s1 <- ggplot(data= data, aes(x=rtfpna)) + 
+              geom_histogram(aes(y =..density..),
+                             col="green",
+                             fill="green",
+                             alpha=.2) + 
+              geom_density(col = 'purple', size = 1) +  
+              labs(x='rtfpna')
+
+s1
+
+```
+
+Gráfico boxplot para verificar a distribuição da variável rtfpna por isocode
+
+```{r echo=FALSE}
+
+s2 <- ggplot(data= data, aes(y=rtfpna, x= isocode)) + 
+      geom_boxplot(aes(fill = isocode)) + 
+      labs(y='rtfpna', x= 'isocode') +
+      scale_fill_brewer(palette = "Dark2")
+
+s2
+
+```
+
+### Série temporal para USA
+
+```{r echo=FALSE}
+
+ss <- subset(data, isocode == 'USA')
+
+s3 <- ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "USA Time Series") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 5)) +
+      scale_y_continuous(breaks = seq(min(ss$rtfpna),max(ss$rtfpna), .05))
+
+s3 
+
+```
+
+### Série temporal para CAN
+
+```{r echo=FALSE}
+
+ss <- subset(data, isocode == 'CAN')
+
+s4 <- ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "CAN Time Series") +
+      geom_point(colour = "#34495e", size = 0.9)+
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 5)) +
+      scale_y_continuous(breaks = seq(min(ss$rtfpna),max(ss$rtfpna), .05))
+
+s4
+
+```
+
+### Série temporal para MEX
+
+```{r echo=FALSE}
+
+ss <- subset(data, isocode == 'MEX')
+
+s4 <- ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "MEX Time Series") +
+      geom_point(colour = "#34495e", size = 0.9)+
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 5)) +
+      scale_y_continuous(breaks = seq(min(ss$rtfpna),max(ss$rtfpna), .05))
+
+s4
+
+```
+
+## **Previsão da Série Temporal**
+
+Irei utilizar modelagem automática ARIMA
+
+##### USA
+
+Prevendo RTFPNA para os próximos 10 anos
+
+```{r echo=FALSE}
+
+arima_result = auto.arima(data$rtfpna[data$isocode == 'USA'])
+
+```
+
+Resultado sumarizado para USA:
+
+```{r echo=FALSE}
+# Sumário
+summary(arima_result)
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 10)
+
+```
+
+Método utilizado pelo ARIMA automático:
+
+```{r echo=FALSE}
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+```
+
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+# Gráfico
+
+ss <- subset(data, isocode == 'USA' & year > 1990)
+
+ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "USA Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 2)) +
+      scale_y_continuous(breaks = seq(0, 2, .02))
+
+
+
+```
+
+##### CAN
+
+Prevendo RTFPNA para os próximos 10 anos
+
+```{r echo=FALSE}
+
+arima_result = auto.arima(data$rtfpna[data$isocode == 'CAN'])
+
+```
+
+Resultado sumarizado para CAN:
+
+```{r echo=FALSE}
+# Sumário
+summary(arima_result)
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 10)
+
+```
+
+Método utilizado pelo ARIMA automático:
+
+```{r echo=FALSE}
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+```
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+# Gráfico
+
+ss <- subset(data, isocode == 'CAN' & year > 1990)
+
+ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "CAN Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 2)) +
+      scale_y_continuous(breaks = seq(0, 2, .02))
+
+
+
+```
+
+##### MEX
+
+Prevendo RTFPNA para os próximos 10 anos
+
+```{r echo=FALSE}
+
+arima_result = auto.arima(data$rtfpna[data$isocode == 'MEX'])
+
+```
+
+Resultado sumarizado para MEX:
+
+```{r echo=FALSE}
+# Sumário
+summary(arima_result)
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 10)
+
+```
+
+Método utilizado pelo ARIMA automático:
+
+```{r echo=FALSE}
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+```
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+
+# Gráfico
+
+ss <- subset(data, isocode == 'MEX' & year > 1990)
+
+ggplot(data = ss, aes(x = as.numeric(year), y = as.numeric(rtfpna))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("rtfpna") + labs(title = "MEX Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2012,2013,2014,2015,2016,2017,2018,2019,2020,2021),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 2)) +
+      scale_y_continuous(breaks = seq(0, 2, .05))
+
+
+
+```
+
+##### Can you think about another feature that could be helpful in explaining TFP series? Explain.
+
+Pode haver correlação entre o PIB - Produto Interno Bruto de um país com seus respectivo TFP - Produtividade Total dos Fatores
+
+Por mais que o PIB não avalie diretamente a eficiência que uma economia combina a totalidade de seus recursos para gerar produto, pode haver correlação entre esta eficiência junto com a soma de todos os bens e serviços produzidos num país em um determinado período.

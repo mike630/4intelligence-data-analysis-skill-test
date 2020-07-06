@@ -1,0 +1,452 @@
+---
+title: "Data Analysis Skill Test - Case 2"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r echo=FALSE}
+
+# Instalando pacotes. Favor desmarcar hashtags dos comandos caso seja necessário instalar algum pacote.
+
+# install.packages('skimr')
+# install.packages('forecast')
+# install.packages('ggplot2')
+# install.packages('RColorBrewer')
+# install.packages('dplyr')
+# install.packages('sqldf')
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+
+# Previne que a programação em R utilize notação científica
+options(scipen=999)
+
+# Mudando o local do R para que não haja erro 
+Sys.setlocale("LC_ALL","English")
+
+# Carregando libraries
+library(skimr)
+library(forecast)
+library(ggplot2)
+library(RColorBrewer)
+library(dplyr)
+library(sqldf)
+
+# Importando arquivo data_comexstat.csv
+data = read.csv('data_comexstat.csv', header = T)
+
+```
+
+## **Sumário do Dataset**
+
+---
+
+```{r echo=FALSE}
+
+skim(data)
+
+```
+
+## **Questionários**
+
+### 1. Show the evolution of total monthly and total annual exports from Brazil (all states and to everywhere) of ‘soybeans’, ‘soybean oil’ and ‘soybean meal’;
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+#Trazendo subset 
+ss <- subset(data, type == 'Export' & product %in% c('soybeans','soybean_oil','soybean_meal')) %>% 
+      select(c(date,product, usd)) %>% 
+      group_by(product , months(as.Date(date), abbreviate = T))  %>%
+      summarise_at('usd', sum, na.rm = F)
+
+# Renomeando as colunas
+colnames(ss) <- c('product', 'month','usd')
+
+# Colocando levels na coluna month para exibir corretamente os meses
+ss$month <- factor(ss$month, levels = month.abb)
+
+s1 <- ggplot(data = ss , aes(x = month, y = usd, fill = product)) + geom_bar(stat = 'identity', na.rm = T) + 
+      labs(title = "Total monthly exports from Brazil") +
+      scale_fill_brewer(palette = "Accent") +
+      theme(legend.position="left") +
+      scale_y_continuous(breaks = seq(0, 100000000000, 10000000000), position = "right")
+
+s1
+
+```
+
+```{r echo=FALSE}
+
+#Trazendo subset 
+ss <- subset(data, type == 'Export' & product %in% c('soybeans','soybean_oil','soybean_meal')) %>% 
+      select(c(date,product, usd)) %>% 
+      group_by(product , format(as.Date(date), '%Y'))  %>%
+      summarise_at('usd', sum, na.rm = F)
+
+# Renomeando as colunas
+colnames(ss) <- c('product', 'year','usd')
+
+s2 <- ggplot(data = ss , aes(x = year, y = usd, fill = product)) + geom_bar(stat = 'identity', na.rm = T) + 
+      labs(title = "Total annual exports from Brazil") +
+      scale_fill_brewer(palette = "Set1") +
+      theme(legend.position="left") +
+      scale_y_continuous(breaks = seq(0, 100000000000, 10000000000), position = "right" ) +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+s2
+
+```
+
+### 2. What are the 3 most important products exported by Brazil in the last 5 years?
+
+Irei atribuir o total do valor dos produtos exportados como indicador para saber quais são os mais importantes que foram exportados do Brasil nos últimos 5 anos.
+
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & 
+            format(as.Date(date), '%Y') %in% c(as.numeric(max(format(as.Date(data$date), '%Y'))),
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-1,
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-2,
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-3, 
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-4))  %>% 
+      select(product, usd) %>% 
+      group_by(product)  %>%
+      summarise_at('usd', sum, na.rm = F)
+
+result <- ss[order(ss$usd, decreasing = T),]
+
+
+result[1:3,]
+
+```
+
+Como resultado acima, soybeans, sugar e soybean_meal foram os 3 produtos exportados pelo Brasil mais importantes nos últimos 5 anos.
+
+### 3. What are the main routes through which Brazil have been exporting ‘corn’ in the last few years? Are there differences in the relative importance of routes depending on the product?
+
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & product == 'corn' &
+            format(as.Date(date), '%Y') %in% c(as.numeric(max(format(as.Date(data$date), '%Y'))),
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-1,
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-2))  %>% 
+      select(route, tons) %>% 
+      group_by(route)  %>%
+      summarise_at('tons', sum, na.rm = F)
+
+
+result <- ss[order(ss$tons, decreasing = T),]
+
+
+result[1:3,]
+
+```
+
+As rotas principais que o Brasil exportou milho foram Sea, River e Other nos últimos 3 anos.
+
+
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' &
+            format(as.Date(date), '%Y') %in% c(as.numeric(max(format(as.Date(data$date), '%Y'))),
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-1,
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-2))  %>% 
+      select(product, route, tons) %>% 
+      group_by(route, product)  %>%
+      summarise_at('tons', sum, na.rm = F)
+
+s3 <- ggplot(data = ss , aes(x = route, y = tons, fill = product)) + geom_bar(stat = 'identity', na.rm = T) + 
+      labs(title = "Exports routes per tons from Brazil in the last 3 years") +
+      scale_fill_brewer(palette = "Set3") +
+      theme(legend.position="left") +
+      scale_y_continuous(breaks = seq(0, 100000000000, 100000000), position = "right" )
+
+s3
+
+```
+
+Conforme o gráfico acima, fica claro que a rota por mar é o tipo de rota que o Brasil mais utiliza para exportar todos os tipos de produtos listados no dataset. Não havendo assim, nenhuma diferença significativa entre as rotas conforme o tipo de produto.
+
+### 4. Which countries have been the most important trade partners for Brazil in terms of ‘corn’ and ‘sugar’ in the last 3 years?
+
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & product %in% c('corn','sugar') &
+            format(as.Date(date), '%Y') %in% c(as.numeric(max(format(as.Date(data$date), '%Y'))),
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-1,
+                                               as.numeric(max(format(as.Date(data$date), '%Y')))-2))  %>% 
+      select(country, usd) %>% 
+      group_by(country)  %>%
+      summarise_at('usd', sum, na.rm = F)
+
+
+
+result <- ss[order(ss$usd, decreasing = T),]
+
+result[1:5,]
+
+```
+
+Conforme tabela acima, Iran, Bangladesh e Algeria são os maiores parceiros comerciais que o Brasil tem, com relação ao total de vendas (exportação) de corn e sugar dos últimos 3 anos.
+
+### 5. For each of the products in the dataset, show the 5 most important states in terms of exports?
+
+```{r echo=FALSE}
+
+campo <- function(product) { paste("SELECT product, state, SUM(usd) 
+                                    FROM data 
+                                    WHERE product = '",product,"' and type = 'Export'
+                                    GROUP BY product, state
+                                    ORDER BY 3 DESC
+                                    LIMIT 5", sep = "", collapse = "")}
+
+df <- data.frame()
+
+for (i in 1:length(levels(as.factor(data$product)))) {
+  
+  result <- sqldf(campo(levels(as.factor(data$product))[i]))
+  df <- rbind(df,result)}
+
+colnames(df) <- c('product','state','usd_total')
+
+df
+
+```
+
+Conforme resultado acima, trouxe os 5 estados mais importantes com relação ao montante de venda de exportação para cada produto do dataset.
+
+## **Time Series Forecast**
+
+### 6. Now, we ask you to show your modelling skills. Feel free to use any type of modelling approach, but bear in mind that the modelling approach depends on the nature of your data, and so different models yield different estimates and forecasts. To help you out in this task we also provide you with a dataset of possible covariates (.xlsx). They all come from public sources (IMF, World Bank) and are presented in index number format. Question: What should be the total brazilian soybeans, soybean_meal, and corn export forecasts, in tons, for the next 11 years (2020-2030)? We’re mostly interested in the annual forecast.
+
+
+##### Corn Exports Time Series
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & product %in% c('corn','soybeans','soybean_meal'))  %>% 
+      select(date, product, tons) %>% 
+      group_by(product, format(as.Date(date), '%Y'))  %>%
+      summarise_at('tons', sum, na.rm = F)
+
+colnames(ss) <- c('product','year','tons')
+
+ggplot(data = ss[ss$product == 'corn',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Corn Exports Time Series") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 2)) +
+      scale_y_continuous(breaks = seq(min(ss$tons),max(ss$tons), 7000000))
+
+```
+
+
+Prevendo toneladas de corn para os próximos 11 anos
+
+Resultado sumarizado para produto Corn:
+```{r echo=FALSE}
+
+arima_result = auto.arima(ss$tons[ss$product == 'corn'])
+
+# Sumário
+summary(arima_result)
+
+```
+
+Método utilizado pelo ARIMA automático:
+```{r echo=FALSE}
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 11)
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+
+```
+
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+ggplot(data = ss[ss$product == 'corn',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Corn Exports Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 3)) +
+      scale_y_continuous(breaks = seq(0, max(previsao$`Hi 95`), 7000000))
+
+```
+
+##### Soybeans Exports Time Series
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & product %in% c('corn','soybeans','soybean_meal'))  %>% 
+      select(date, product, tons) %>% 
+      group_by(product, format(as.Date(date), '%Y'))  %>%
+      summarise_at('tons', sum, na.rm = F)
+
+colnames(ss) <- c('product','year','tons')
+
+ggplot(data = ss[ss$product == 'soybeans',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Soybeans Exports Time Series") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 2)) +
+      scale_y_continuous(breaks = seq(min(ss$tons),max(ss$tons), 7000000))
+
+```
+
+
+Prevendo toneladas de soybeans para os próximos 11 anos
+
+Resultado sumarizado para produto soybeans:
+```{r echo=FALSE}
+
+arima_result = auto.arima(ss$tons[ss$product == 'soybeans'])
+
+# Sumário
+summary(arima_result)
+
+```
+
+Método utilizado pelo ARIMA automático:
+```{r echo=FALSE}
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 11)
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+
+```
+
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+ggplot(data = ss[ss$product == 'soybeans',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Soybeans Exports Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 3)) +
+      scale_y_continuous(breaks = seq(0, max(previsao$`Hi 95`), 7000000))
+
+```
+
+##### Soybean_meal Exports Time Series
+```{r echo=FALSE}
+
+ss <- subset(data, type == 'Export' & product %in% c('corn','soybeans','soybean_meal'))  %>% 
+      select(date, product, tons) %>% 
+      group_by(product, format(as.Date(date), '%Y'))  %>%
+      summarise_at('tons', sum, na.rm = F)
+
+colnames(ss) <- c('product','year','tons')
+
+ggplot(data = ss[ss$product == 'soybean_meal',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Soybean Meal Exports Time Series") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      scale_x_continuous(breaks = seq(min(ss$year),max(ss$year), 2)) +
+      scale_y_continuous(breaks = seq(min(ss$tons),max(ss$tons), 7000000))
+
+```
+
+
+Prevendo toneladas de soybean_meal para os próximos 11 anos
+
+Resultado sumarizado para produto soybean_meal:
+```{r echo=FALSE}
+
+arima_result = auto.arima(ss$tons[ss$product == 'soybean_meal'])
+
+# Sumário
+summary(arima_result)
+
+```
+
+Método utilizado pelo ARIMA automático:
+```{r echo=FALSE}
+
+# Previsão
+previsaoARIMA = forecast(arima_result, h = 11)
+
+previsaoARIMA$method
+
+```
+
+Forecast do modelo
+
+```{r echo=FALSE}
+
+previsao <- as.data.frame(previsaoARIMA)
+
+previsao
+
+
+```
+
+Plotando a previsão na série temporal junto com intervalo de confiança de 80% e 95%
+
+```{r echo=FALSE}
+
+ggplot(data = ss[ss$product == 'soybean_meal',], aes(x = as.numeric(year), y = as.numeric(tons))) + 
+      geom_line(color = "#d35400", size = 1)  + 
+      xlab("year") + ylab("tons") + labs(title = "Soybean Meal Exports Time Series Forecast") +
+      geom_point(colour = "#34495e", size = 0.9) +
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`,
+                    ymax= `Hi 95`, ymin= `Lo 95`),
+                 data=previsao, fill="#7b7d7d") + 
+      geom_ribbon(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                      y=`Point Forecast`,
+                      ymax= `Hi 80`, ymin= `Lo 80`),
+                  data=previsao, fill="#424949") +
+      geom_line(aes(x=c(2020,2021,2022,2023,2024,2025,2026,2027,2028,2029,2030),
+                    y=`Point Forecast`), data = previsao, color = 'purple', size = .8) +
+      scale_x_continuous(breaks = seq(min(ss$year),2030, 3)) +
+      scale_y_continuous(breaks = seq(0, max(previsao$`Hi 95`), 7000000))
+
+```
